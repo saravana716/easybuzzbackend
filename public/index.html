@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Easebuzz Payment Test</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 24px;
+      color: #111827;
+    }
+    .container {
+      max-width: 520px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 12px;
+      padding: 28px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    }
+    h1 { margin-top: 0; font-size: 1.5rem; }
+    label {
+      display: block;
+      margin-top: 14px;
+      margin-bottom: 6px;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+    button {
+      margin-top: 20px;
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      background: #2563eb;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .note {
+      margin-top: 20px;
+      padding: 14px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    .note.success { background: #ecfdf5; border: 1px solid #a7f3d0; }
+    .note.warning { background: #fffbeb; border: 1px solid #fde68a; }
+    .error {
+      margin-top: 16px;
+      color: #dc2626;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Easebuzz Payment Gateway</h1>
+    <p>Test payment using your sandbox credentials.</p>
+
+    <form id="paymentForm">
+      <label for="amount">Amount (INR)</label>
+      <input id="amount" type="number" min="1" step="0.01" value="10.00" required />
+
+      <label for="firstname">First Name</label>
+      <input id="firstname" type="text" value="Dinesh" required />
+
+      <label for="email">Email</label>
+      <input id="email" type="email" value="test@example.com" required />
+
+      <label for="phone">Phone (10 digits)</label>
+      <input id="phone" type="tel" value="9876543210" maxlength="10" required />
+
+      <label for="productinfo">Product Info</label>
+      <input id="productinfo" type="text" value="Test Product" required />
+
+      <label for="paymentMode">Payment Method (recommended for testing)</label>
+      <select id="paymentMode">
+        <option value="UPI,NB" selected>UPI + Net Banking (recommended)</option>
+        <option value="UPI">UPI only</option>
+        <option value="NB">Net Banking only</option>
+        <option value="DC">Debit Card (domestic)</option>
+        <option value="CC,DC">Credit + Debit Card</option>
+        <option value="">All enabled methods</option>
+      </select>
+
+      <button type="submit" id="payBtn">Pay with Easebuzz</button>
+      <div class="error" id="error"></div>
+    </form>
+
+    <div class="note success">
+      <strong>How to test successfully:</strong><br />
+      1. Keep <strong>UPI + Net Banking</strong> selected<br />
+      2. On Easebuzz page, choose <strong>UPI</strong> or <strong>Net Banking</strong><br />
+      3. For UPI sandbox: use test UPI ID shown on the page<br />
+      4. For Net Banking: pick any test bank and complete the flow
+    </div>
+
+    <div class="note warning">
+      <strong>Card error GC0C05?</strong><br />
+      Your merchant account does not support international cards. The test Visa/Mastercard numbers from Easebuzz may be blocked. Use UPI or Net Banking instead, or ask Easebuzz support to enable domestic/international cards on your account.
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('paymentForm');
+    const errorEl = document.getElementById('error');
+    const payBtn = document.getElementById('payBtn');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      errorEl.textContent = '';
+      payBtn.disabled = true;
+      payBtn.textContent = 'Redirecting...';
+
+      const paymentMode = document.getElementById('paymentMode').value;
+      const body = {
+        amount: document.getElementById('amount').value,
+        firstname: document.getElementById('firstname').value,
+        email: document.getElementById('email').value,
+        phone: document.getElementById('phone').value,
+        productinfo: document.getElementById('productinfo').value,
+      };
+
+      if (paymentMode) {
+        body.show_payment_mode = paymentMode;
+      }
+
+      try {
+        const response = await fetch('/api/payment/initiate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || 'Payment initiation failed');
+        }
+
+        window.location.href = result.data.paymentUrl;
+      } catch (error) {
+        errorEl.textContent = error.message;
+        payBtn.disabled = false;
+        payBtn.textContent = 'Pay with Easebuzz';
+      }
+    });
+  </script>
+</body>
+</html>
