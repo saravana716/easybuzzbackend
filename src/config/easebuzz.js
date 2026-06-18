@@ -13,6 +13,7 @@ module.exports = {
   env: ENV,
   baseUrl: BASE_URLS[ENV] || BASE_URLS.test,
   appBaseUrl: process.env.BASE_URL || 'http://localhost:3000',
+  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
   // UPI + Net Banking work for most Indian test merchants (cards may need Easebuzz activation)
   defaultPaymentModes: process.env.DEFAULT_PAYMENT_MODES || 'UPI,NB',
 };

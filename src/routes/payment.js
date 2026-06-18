@@ -1,5 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
+const config = require('../config/easebuzz');
 const {
   initiatePayment,
   validateCallbackResponse,
@@ -40,6 +41,7 @@ router.post('/initiate', async (req, res) => {
       txnid,
       amount: payment.amount,
       status: 'initiated',
+      frontendUrl: req.body.frontendUrl || config.frontendUrl,
       createdAt: new Date().toISOString(),
     });
 
@@ -58,20 +60,14 @@ router.post('/initiate', async (req, res) => {
 
 function handleCallback(req, res, outcome) {
   const validation = validateCallbackResponse(req.body);
+  const existing = transactions.get(validation?.txnid) || {};
+  const frontendUrl = existing.frontendUrl || config.frontendUrl;
 
   if (!validation.valid) {
-    return res.status(400).send(`
-      <html>
-        <body style="font-family: sans-serif; padding: 40px;">
-          <h2>Payment verification failed</h2>
-          <p>${validation.message}</p>
-          <a href="/">Go back</a>
-        </body>
-      </html>
-    `);
+    const errorMsg = encodeURIComponent(validation.message || 'Payment verification failed');
+    return res.redirect(`${frontendUrl}/checkout?step=5&error=${errorMsg}`);
   }
 
-  const existing = transactions.get(validation.txnid) || {};
   transactions.set(validation.txnid, {
     ...existing,
     ...validation.data,
@@ -82,22 +78,12 @@ function handleCallback(req, res, outcome) {
   });
 
   const isSuccess = validation.status === 'success';
-  const title = isSuccess ? 'Payment Successful' : 'Payment Failed';
-  const color = isSuccess ? '#16a34a' : '#dc2626';
 
-  return res.send(`
-    <html>
-      <body style="font-family: sans-serif; padding: 40px; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: ${color};">${title}</h2>
-        <p><strong>Transaction ID:</strong> ${validation.txnid}</p>
-        <p><strong>Easepay ID:</strong> ${validation.easepayid || 'N/A'}</p>
-        <p><strong>Amount:</strong> INR ${validation.amount}</p>
-        <p><strong>Status:</strong> ${validation.status}</p>
-        <br />
-        <a href="/" style="color: #2563eb;">Make another payment</a>
-      </body>
-    </html>
-  `);
+  if (isSuccess) {
+    return res.redirect(`${frontendUrl}/checkout?step=6&txnid=${validation.txnid}`);
+  } else {
+    return res.redirect(`${frontendUrl}/checkout?step=5&txnid=${validation.txnid}&error=payment_failed`);
+  }
 }
 
 router.post('/success', (req, res) => handleCallback(req, res, 'success'));
