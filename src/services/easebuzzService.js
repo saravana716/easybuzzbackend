@@ -30,9 +30,9 @@ function buildPaymentPayload(input) {
     udf5: input.udf5 || '',
     udf6: input.udf6 || '',
     udf7: input.udf7 || '',
-    udf8: input.udf8 || '',
-    udf9: input.udf9 || '',
-    udf10: input.udf10 || '',
+    udf8: '',
+    udf9: '',
+    udf10: '',
   };
 
   if (input.show_payment_mode) {
