@@ -1,6 +1,6 @@
 const axios = require('axios');
 const config = require('../config/easebuzz');
-const { db } = require('../config/firebase');
+const { admin, db } = require('../config/firebase');
 const { generateInitiateHash, verifyResponseHash } = require('../utils/hash');
 
 function formatAmount(amount) {
@@ -92,8 +92,7 @@ async function initiatePayment(input) {
 
   // Persist transaction to Firestore for reliability
   try {
-    const { doc, setDoc, serverTimestamp } = require('firebase/firestore');
-    await setDoc(doc(db, 'transactions', payload.txnid), {
+    await db.collection('transactions').doc(payload.txnid).set({
       txnid: payload.txnid,
       amount: payload.amount,
       firstname: payload.firstname,
@@ -108,9 +107,8 @@ async function initiatePayment(input) {
       udf5: payload.udf5 || '',
       udf6: payload.udf6 || '',
       udf7: payload.udf7 || '',
-      udf8: payload.udf8 || '',
       frontendUrl: input.frontendUrl || config.frontendUrl,
-      createdAt: serverTimestamp()
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
   } catch (fsError) {
     console.error('Firestore transaction logging failed:', fsError);
@@ -145,8 +143,6 @@ function validateCallbackResponse(responseBody) {
 }
 
 async function processChitfundPayment(paymentData) {
-  const { doc, getDoc, updateDoc, setDoc, collection, query, orderBy, getDocs, limit, serverTimestamp, increment } = require('firebase/firestore');
-
   const {
     amount,
     udf1: schemeId,
@@ -172,10 +168,13 @@ async function processChitfundPayment(paymentData) {
 
   // 1. Fetch current gold rate from Firestore
   let currentGoldRate = 0;
-  const goldRateQuery = query(collection(db, 'goldRates'), orderBy('createdAt', 'desc'), limit(1));
-  const goldRateSnap = await getDocs(goldRateQuery);
-  if (!goldRateSnap.empty) {
-    currentGoldRate = Number(goldRateSnap.docs[0].data().goldRate);
+  const goldRatesSnap = await db.collection('goldRates')
+    .orderBy('createdAt', 'desc')
+    .limit(1)
+    .get();
+
+  if (!goldRatesSnap.empty) {
+    currentGoldRate = Number(goldRatesSnap.docs[0].data().goldRate);
   } else {
     console.warn('[processChitfundPayment] No gold rate found in Firestore! Using 0.');
   }
@@ -191,9 +190,9 @@ async function processChitfundPayment(paymentData) {
 
   console.log(`[processChitfundPayment] Calculated: Total Paid = ₹${cleanAmount}, Base = ₹${baseAmount}, Gold Rate = ₹${currentGoldRate}/g, Weight = ${weightBought}g`);
 
-  const schemeRef = doc(db, 'customers', schemeId);
-  const snap = await getDoc(schemeRef);
-  if (!snap.exists()) {
+  const schemeRef = db.collection('customers').doc(schemeId);
+  const snap = await schemeRef.get();
+  if (!snap.exists) {
     throw new Error(`Scheme customer record with ID ${schemeId} not found in Firestore`);
   }
 
@@ -212,12 +211,12 @@ async function processChitfundPayment(paymentData) {
     const nextPaidCount = currentPaid + 1;
 
     const updates = {
-      paidInstallments: increment(1),
-      lastPaymentDate: serverTimestamp(),
+      paidInstallments: admin.firestore.FieldValue.increment(1),
+      lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
       paymentStatus: 'Paid',
       paymentMethod: method,
-      savedWeight: increment(weightBought),
-      savedAmount: increment(baseAmount)
+      savedWeight: admin.firestore.FieldValue.increment(weightBought),
+      savedAmount: admin.firestore.FieldValue.increment(baseAmount)
     };
 
     if (existingData.status === 'Pending') {
@@ -229,30 +228,30 @@ async function processChitfundPayment(paymentData) {
       updates.maturityDate = new Date().toLocaleDateString('en-GB');
     }
 
-    await updateDoc(schemeRef, updates);
-    await updateDoc(doc(db, 'planPurchases', schemeId), updates);
+    await schemeRef.update(updates);
+    await db.collection('planPurchases').doc(schemeId).update(updates);
   } else {
     // New Scheme Join
     const joinUpdates = {
       status: 'Active',
       paymentStatus: 'Paid',
       paidInstallments: 1,
-      lastPaymentDate: serverTimestamp(),
+      lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
       paymentMethod: method,
       savedWeight: weightBought,
       savedAmount: baseAmount
     };
 
-    await updateDoc(schemeRef, joinUpdates);
-    await updateDoc(doc(db, 'planPurchases', schemeId), joinUpdates);
+    await schemeRef.update(joinUpdates);
+    await db.collection('planPurchases').doc(schemeId).update(joinUpdates);
   }
 
   // 4. Fetch updated paidInstallments for history
-  const freshSnap = await getDoc(schemeRef);
-  const instNo = freshSnap.exists() ? String(freshSnap.data().paidInstallments || 1) : '1';
+  const freshSnap = await schemeRef.get();
+  const instNo = freshSnap.exists ? String(freshSnap.data().paidInstallments || 1) : '1';
 
   // 5. Add installment record to installments collection
-  const paymentHistoryRef = doc(collection(db, 'installments'));
+  const paymentHistoryRef = db.collection('installments').doc();
   const dateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-');
 
   const installmentData = {
@@ -268,8 +267,8 @@ async function processChitfundPayment(paymentData) {
     status: 'Paid',
     customerId: linked_user_id || '',
     planId: schemeId || '',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     accountNo: accountNo || '',
     paymentId: paymentHistoryRef.id,
     userId: linked_user_id || '',
@@ -279,24 +278,24 @@ async function processChitfundPayment(paymentData) {
     planName: planName || ''
   };
 
-  await setDoc(paymentHistoryRef, installmentData);
+  await paymentHistoryRef.set(installmentData);
 
   // 6. Add record to payments audit collection
-  const paymentRecordRef = doc(collection(db, 'payments'));
-  await setDoc(paymentRecordRef, {
+  const paymentRecordRef = db.collection('payments').doc();
+  await paymentRecordRef.set({
     customerName: userName || '',
     chitPlan: planName || '',
     dueAmount: `₹ ${baseAmount.toFixed(2)}`,
     paidAmount: `₹ ${cleanAmount.toFixed(2)}`,
     dueDate: dateStr,
     status: 'Completed',
-    createdAt: serverTimestamp()
+    createdAt: admin.firestore.FieldValue.serverTimestamp()
   });
 
   // 7. Add app notification
   try {
-    const notificationRef = doc(collection(db, 'app_notifications'));
-    await setDoc(notificationRef, {
+    const notificationRef = db.collection('app_notifications').doc();
+    await notificationRef.set({
       userId: linked_user_id || '',
       title: isInstallment ? 'Installment Paid' : 'Scheme Joined',
       message: isInstallment
@@ -304,7 +303,7 @@ async function processChitfundPayment(paymentData) {
         : `Welcome! You've successfully joined ${planName} with a payment of ₹${cleanAmount.toFixed(2)}.`,
       type: 'payment',
       isRead: false,
-      timestamp: serverTimestamp()
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
   } catch (notifyErr) {
     console.error('Non-critical: Failed to create notification doc:', notifyErr);

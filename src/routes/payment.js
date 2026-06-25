@@ -1,8 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const config = require('../config/easebuzz');
-const { db } = require('../config/firebase');
-const { doc, getDoc, setDoc, serverTimestamp } = require('firebase/firestore');
+const { admin, db } = require('../config/firebase');
 const {
   initiatePayment,
   validateCallbackResponse,
@@ -69,8 +68,8 @@ async function handleCallback(req, res, outcome) {
     
     if (validation.txnid) {
       try {
-        const txnSnap = await getDoc(doc(db, 'transactions', validation.txnid));
-        if (txnSnap.exists()) {
+        const txnSnap = await db.collection('transactions').doc(validation.txnid).get();
+        if (txnSnap.exists) {
           existingTxn = txnSnap.data();
           frontendUrl = existingTxn.frontendUrl || config.frontendUrl;
         }
@@ -85,10 +84,10 @@ async function handleCallback(req, res, outcome) {
       // Update transaction status to failed in Firestore
       if (validation.txnid) {
         try {
-          await setDoc(doc(db, 'transactions', validation.txnid), {
+          await db.collection('transactions').doc(validation.txnid).set({
             status: 'failed',
             error: validation.message || 'Verification failed',
-            updatedAt: serverTimestamp()
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
         } catch (fsErr) {
           console.error('Failed to log transaction failure to Firestore:', fsErr);
@@ -102,13 +101,13 @@ async function handleCallback(req, res, outcome) {
 
     // Update main transaction status in Firestore
     try {
-      await setDoc(doc(db, 'transactions', validation.txnid), {
+      await db.collection('transactions').doc(validation.txnid).set({
         status: validation.status,
         easepayid: validation.easepayid,
         mode: validation.data.mode,
         verified: true,
         outcome,
-        updatedAt: serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         rawCallbackData: validation.data
       }, { merge: true });
     } catch (fsErr) {
@@ -145,9 +144,9 @@ router.post('/failure', (req, res) => handleCallback(req, res, 'failure'));
 
 router.get('/status/:txnid', async (req, res) => {
   try {
-    const txnSnap = await getDoc(doc(db, 'transactions', req.params.txnid));
+    const txnSnap = await db.collection('transactions').doc(req.params.txnid).get();
 
-    if (!txnSnap.exists()) {
+    if (!txnSnap.exists) {
       return res.status(404).json({
         success: false,
         message: 'Transaction not found',

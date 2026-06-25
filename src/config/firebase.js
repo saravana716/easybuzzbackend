@@ -1,17 +1,35 @@
-const { initializeApp } = require('firebase/app');
-const { getFirestore } = require('firebase/firestore');
+const admin = require('firebase-admin');
 require('dotenv').config();
 
-const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY || "AIzaSyCIQTnZkvfiQEW1SsMygTqnGaN3Yj4lrFM",
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN || "srikalyanijewellery-chitfund.firebaseapp.com",
-  projectId: process.env.FIREBASE_PROJECT_ID || "srikalyanijewellery-chitfund",
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "srikalyanijewellery-chitfund.firebasestorage.app",
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "966692060880",
-  appId: process.env.FIREBASE_APP_ID || "1:966692060880:web:284f7db94cb86ca475a8d5"
+if (!admin.apps.length) {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    try {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+      console.log('Firebase Admin SDK initialized successfully using environment variable.');
+    } catch (error) {
+      console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT env variable:', error);
+      admin.initializeApp();
+    }
+  } else {
+    try {
+      const serviceAccount = require('../../serviceAccountKey.json');
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+      console.log('Firebase Admin SDK initialized successfully using local serviceAccountKey.json.');
+    } catch (error) {
+      console.warn('FIREBASE_SERVICE_ACCOUNT env variable not set and local serviceAccountKey.json not found. Initializing with defaults.');
+      admin.initializeApp();
+    }
+  }
+}
+
+const db = admin.firestore();
+
+module.exports = {
+  admin,
+  db
 };
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-module.exports = { db };
