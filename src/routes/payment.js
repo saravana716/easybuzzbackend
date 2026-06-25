@@ -179,46 +179,4 @@ router.get('/transactions', async (req, res) => {
   }
 });
 
-router.get('/debug-txns', async (req, res) => {
-  try {
-    const txnsSnap = await db.collection('transactions').get();
-    const txns = [];
-    txnsSnap.forEach(d => {
-      const data = d.data();
-      txns.push({ 
-        id: d.id, 
-        amount: data.amount, 
-        status: data.status, 
-        udf1: data.udf1, 
-        udf7: data.udf7,
-        createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt) : null
-      });
-    });
-
-    const instsSnap = await db.collection('installments').get();
-    const insts = [];
-    instsSnap.forEach(d => {
-      const data = d.data();
-      insts.push({ 
-        id: d.id, 
-        planId: data.planId, 
-        installmentNo: data.installmentNo, 
-        amount: data.amount,
-        createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt) : null
-      });
-    });
-
-    return res.json({
-      success: true,
-      transactions: txns,
-      installments: insts
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-});
-
 module.exports = router;
