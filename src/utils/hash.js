@@ -45,6 +45,7 @@ function sha512(value) {
 function generateInitiateHash(params, salt) {
   const parts = INITIATE_HASH_SEQUENCE.map((field) => params[field] || '');
   const hashString = `${parts.join('|')}|${salt}`;
+  console.log('Raw Hash String:', hashString);
   return sha512(hashString);
 }
 

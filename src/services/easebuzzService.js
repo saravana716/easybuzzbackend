@@ -53,6 +53,30 @@ async function initiatePayment(input) {
   const payload = buildPaymentPayload(input);
   const url = `${config.baseUrl}payment/initiateLink`;
 
+  // Debug logging to isolate hash mismatch root cause
+  console.log('--- Easebuzz Hash Debugging ---');
+  console.log('API URL:', url);
+  console.log('Config Key:', config.key);
+  console.log('Config Salt:', config.salt);
+  console.log('Config Env:', config.env);
+  console.log('Payload Key:', payload.key);
+  console.log('Payload TxnID:', payload.txnid);
+  console.log('Payload Amount:', payload.amount);
+  console.log('Payload ProductInfo:', payload.productinfo);
+  console.log('Payload Name:', payload.firstname);
+  console.log('Payload Email:', payload.email);
+  console.log('Payload Phone:', payload.phone);
+  console.log('Payload UDF1:', payload.udf1);
+  console.log('Payload UDF2:', payload.udf2);
+  console.log('Payload UDF3:', payload.udf3);
+  console.log('Payload UDF4:', payload.udf4);
+  console.log('Payload UDF5:', payload.udf5);
+  console.log('Payload UDF6:', payload.udf6);
+  console.log('Payload UDF7:', payload.udf7);
+  console.log('Payload UDF8:', payload.udf8);
+  console.log('Generated Hash:', payload.hash);
+  console.log('--------------------------------');
+
   const response = await axios.post(url, new URLSearchParams(payload).toString(), {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
