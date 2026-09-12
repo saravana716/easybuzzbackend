@@ -43,20 +43,14 @@ function sha512(value) {
 }
 
 function generateInitiateHash(params, salt) {
-  const parts = INITIATE_HASH_SEQUENCE.map((field) => {
-    const val = params[field];
-    return (val === undefined || val === null) ? '' : String(val);
-  });
+  const parts = INITIATE_HASH_SEQUENCE.map((field) => params[field] || '');
   const hashString = `${parts.join('|')}|${salt}`;
   console.log('Raw Hash String:', hashString);
   return sha512(hashString);
 }
 
 function verifyResponseHash(response, salt) {
-  const reverseParts = RESPONSE_HASH_SEQUENCE.map((field) => {
-    const val = response[field];
-    return (val === undefined || val === null) ? '' : String(val);
-  });
+  const reverseParts = RESPONSE_HASH_SEQUENCE.map((field) => response[field] || '');
   const hashString = `${salt}|${response.status}|${reverseParts.join('|')}`;
   const expectedHash = sha512(hashString);
   return expectedHash === (response.hash || '').toLowerCase();
